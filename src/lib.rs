@@ -105,4 +105,87 @@ impl ActionKV {
 
         Ok(current_position)
     }
+
+    pub fn seek_to_end(&mut self) -> io::Result<u64> {
+        self.f.seek(SeekFrom::End(0))
+    }
+
+    pub fn load(&mut self) -> io::Result<()> {
+        let mut f = BufReader::new(&mut self.f);
+
+        loop {
+            let current_position = f.seek(SeekFrom::Current(0))?;
+
+            let maybe_kv = ActionKV::process_record(&mut f);
+            let kv = match maybe_kv {
+                Ok(kv) => kv,
+                Err(err) => {
+                    match err.kind() {
+                        io::ErrorKind::UnexpectedEof => {
+                            // <3>
+                            break;
+                        }
+                        _ => return Err(err),
+                    }
+                }
+            };
+
+            self.index.insert(kv.key, current_position);
+        }
+
+        Ok(())
+    }
+
+    pub fn get(&mut self, key: &ByteStr) -> io::Result<Option<ByteString>> {
+        // <4>
+        let position = match self.index.get(key) {
+            None => return Ok(None),
+            Some(position) => *position,
+        };
+
+        let kv = self.get_at(position)?;
+
+        Ok(Some(kv.value))
+    }
+
+    pub fn get_at(&mut self, position: u64) -> io::Result<KeyValuePair> {
+        let mut f = BufReader::new(&mut self.f);
+        f.seek(SeekFrom::Start(position))?;
+        let kv = ActionKV::process_record(&mut f)?;
+
+        Ok(kv)
+    }
+
+    pub fn find(&mut self, target: &ByteStr) -> io::Result<Option<(u64, ByteString)>> {
+        let mut f = BufReader::new(&mut self.f);
+
+        let mut found: Option<(u64, ByteString)> = None;
+
+        loop {
+            let position = f.seek(SeekFrom::Current(0))?;
+
+            let maybe_kv = ActionKV::process_record(&mut f);
+            let kv = match maybe_kv {
+                Ok(kv) => kv,
+                Err(err) => {
+                    match err.kind() {
+                        io::ErrorKind::UnexpectedEof => {
+                            // <3>
+                            break;
+                        }
+                        _ => return Err(err),
+                    }
+                }
+            };
+
+            if kv.key == target {
+                found = Some((position, kv.value));
+            }
+
+            // important to keep looping until the end of the file,
+            // in case the key has been overwritten
+        }
+
+        Ok(found)
+    }
 }
