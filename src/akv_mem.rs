@@ -1,4 +1,6 @@
-#[cfg(target_os = "windows")]
+use libactionkv::ActionKV; // <1>
+
+#[cfg(target_os = "windows")] // <2>
 const USAGE: &str = "
 Usage:
     akv_mem.exe FILE get KEY
