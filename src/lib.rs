@@ -38,7 +38,7 @@ impl ActionKV {
             .append(true) // Don't delete any content that's already been written to disk.
             .open(path)?;
         Ok(ActionKV {
-            f: f,
+            f,
             index: HashMap::new(),
         })
     }
